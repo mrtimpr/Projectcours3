@@ -1,108 +1,114 @@
-from unittest.mock import patch
+from typing import Any
 
 import pandas as pd
 import pytest
 
 from src.views import main_page_view
 
-# Тестирование основного сценария main_page_view с использованием mock-ов
 
-
-@patch("src.views.get_stock_prices")
-@patch("src.views.get_currency_rates")
-@patch("src.views.top_transactions")
-@patch("src.views.cards_summary")
-@patch("src.views.load_user_settings")
-@patch("src.views.get_greeting")
-def test_main_page_view_basic_flow(
-    mock_get_greeting,
-    mock_load_user_settings,
-    mock_cards_summary,
-    mock_top_transactions,
-    mock_get_currency_rates,
-    mock_get_stock_prices,
-    sample_transactions_df,
-):
+def test_main_page_view_basic(
+    sample_transactions_df: pd.DataFrame,
+    monkeypatch,
+) -> None:
     """
-    Проверяет, что main_page_view вызывает все необходимые вспомогательные
-    функции и формирует корректную структуру ответа.
+    Базовая проверка структуры JSON для главной страницы.
     """
 
-    mock_get_greeting.return_value = "Добрый день, User!"
-    mock_load_user_settings.return_value = {"user_currencies": ["EUR", "USD"], "user_stocks": ["AAPL"]}
-    mock_cards_summary.return_value = [{"card": "Visa 1234", "balance": 1000.0}]
-    mock_top_transactions.return_value = [{"date": "...", "amount": -500.0}]
-    mock_get_currency_rates.return_value = [{"currency": "EUR", "rate": 90.0}]
-    mock_get_stock_prices.return_value = [{"stock": "AAPL", "price": 150.0}]
-
-    date_time_input = "2021-12-21 14:30:00"
-
-    result = main_page_view(
-        date_time=date_time_input,
-        transactions=sample_transactions_df,
+    monkeypatch.setattr(
+        "src.views.get_currency_rates",
+        lambda _: [{"currency": "USD", "rate": 90}],
+    )
+    monkeypatch.setattr(
+        "src.views.get_stock_prices",
+        lambda _: [{"ticker": "AAPL", "price": 150}],
     )
 
-    mock_get_greeting.assert_called_once_with(pd.to_datetime(date_time_input))
-    mock_load_user_settings.assert_called_once()
-
-    mock_cards_summary.assert_called_once()
-    mock_top_transactions.assert_called_once()
-
-    mock_get_currency_rates.assert_called_once_with(["EUR", "USD"])
-    mock_get_stock_prices.assert_called_once_with(["AAPL"])
-
-    assert "greeting" in result
-    assert "cards" in result
-    assert "top_transactions" in result
-    assert "currency_rates" in result
-    assert "stock_prices" in result
-
-    assert result["greeting"] == "Добрый день, User!"
-    assert result["currency_rates"] == [{"currency": "EUR", "rate": 90.0}]
-    assert result["stock_prices"] == [{"stock": "AAPL", "price": 150.0}]
-
-
-# Тестирование сценариев без пользовательских настроек
-
-
-@patch("src.views.get_stock_prices")
-@patch("src.views.get_currency_rates")
-@patch("src.views.load_user_settings")
-def test_main_page_view_no_settings(
-    mock_load_user_settings, mock_get_currency_rates, mock_get_stock_prices, sample_transactions_df
-):
-    """
-    Проверяет, что запросы на курсы валют/акции НЕ выполняются, если
-    в настройках пользователя они не указаны.
-    """
-
-    mock_load_user_settings.return_value = {"user_currencies": [], "user_stocks": []}
-
-    date_time_input = "2021-12-21 14:30:00"
-
-    result = main_page_view(
-        date_time=date_time_input,
-        transactions=sample_transactions_df,
+    result: dict[str, Any] = main_page_view(
+        date_time="2022-01-15 12:00:00",
+        transactions=sample_transactions_df.to_dict(orient="records"),
     )
 
-    mock_get_currency_rates.assert_not_called()
-    mock_get_stock_prices.assert_not_called()
+    assert isinstance(result, dict)
 
-    assert result["currency_rates"] == []
-    assert result["stock_prices"] == []
+    # расходы
+    assert "expenses" in result
+    assert isinstance(result["expenses"]["total_amount"], int)
+    assert isinstance(result["expenses"]["main"], list)
+    assert isinstance(result["expenses"]["transfers_and_cash"], list)
+
+    # доходы
+    assert "income" in result
+    assert isinstance(result["income"]["total_amount"], int)
+    assert isinstance(result["income"]["main"], list)
+
+    # курсы / акции
+    assert isinstance(result["currency_rates"], list)
+    assert isinstance(result["stock_prices"], list)
 
 
-# Тестирование обработки ошибок
-
-
-def test_main_page_view_invalid_date_format(sample_transactions_df):
+def test_main_page_view_expenses_content(
+    sample_transactions_df: pd.DataFrame,
+    monkeypatch,
+) -> None:
     """
-    Проверяет, что функция выбрасывает ValueError при некорректном формате даты/времени.
+    Проверяет корректность структуры элементов расходов.
     """
-    invalid_date = "2021-12-21_INVALID_TIME"
 
-    with pytest.raises(ValueError, match="Некорректный формат даты"):
+    monkeypatch.setattr("src.views.get_currency_rates", lambda _: [])
+    monkeypatch.setattr("src.views.get_stock_prices", lambda _: [])
+
+    result = main_page_view(
+        date_time="2022-01-20 10:00:00",
+        transactions=sample_transactions_df.to_dict(orient="records"),
+    )
+
+    expenses_main = result["expenses"]["main"]
+
+    for item in expenses_main:
+        assert "category" in item
+        assert "amount" in item
+        assert isinstance(item["category"], str)
+        assert isinstance(item["amount"], int)
+
+
+def test_main_page_view_income_content(
+    sample_transactions_df: pd.DataFrame,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("src.views.get_currency_rates", lambda _: [])
+    monkeypatch.setattr("src.views.get_stock_prices", lambda _: [])
+
+    result = main_page_view(
+        date_time="2022-01-10 09:00:00",
+        transactions=sample_transactions_df.to_dict(orient="records"),
+    )
+
+    for item in result["income"]["main"]:
+        assert "category" in item
+        assert "amount" in item
+        assert isinstance(item["category"], str)
+        assert isinstance(item["amount"], int)
+
+
+def test_main_page_view_invalid_date_format(
+    sample_transactions_df: pd.DataFrame,
+) -> None:
+    with pytest.raises(ValueError):
         main_page_view(
-            date_time=invalid_date,
-            transactions=sample_transactions_df,
+            date_time="2022/01/10",
+            transactions=sample_transactions_df.to_dict(orient="records"),
         )
+
+
+def test_main_page_view_empty_transactions(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("src.views.get_currency_rates", lambda _: [])
+    monkeypatch.setattr("src.views.get_stock_prices", lambda _: [])
+
+    result = main_page_view(
+        date_time="2022-01-01 00:00:00",
+        transactions=[],
+    )
+
+    assert result == {}

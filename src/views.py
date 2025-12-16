@@ -1,63 +1,112 @@
 import logging
 from datetime import datetime
+from typing import Any
 
 import pandas as pd
 
-from src.utils import (cards_summary, get_currency_rates, get_greeting, get_month_period, get_stock_prices,
-                       load_user_settings, top_transactions)
+from src.utils import get_currency_rates, get_stock_prices
 
 logger = logging.getLogger(__name__)
 
 
-def main_page_view(date_time: str, transactions: pd.DataFrame) -> dict:
+def main_page_view(
+    date_time: str,
+    transactions: list[dict[str, Any]],
+) -> dict[str, Any]:
+
+    df = pd.DataFrame(transactions)
+
     """
-    Формирует JSON-ответ для страницы «Главная».
+    Формирует финансовый отчет для страницы «Главная».
     """
-    logger.info("Формирование данных главной страницы")
-    logger.debug("Входящая дата/время: %s", date_time)
+
+    logger.info("Формирование главной страницы за %s", date_time)
 
     try:
-        current_dt = datetime.strptime(date_time, "%Y-%m-%d %H:%M:%S")
-    except ValueError:
-        logger.exception("Некорректный формат даты: %s", date_time)
-        raise ValueError(f"Некорректный формат даты: {date_time}")
+        report_dt: datetime = datetime.strptime(
+            date_time,
+            "%Y-%m-%d %H:%M:%S",
+        )
+    except ValueError as exc:
+        raise ValueError("Неверный формат даты") from exc
 
-    df = transactions.copy()
+    if not transactions:
+        logger.warning("Список транзакций пуст")
+        return {}
 
-    logger.debug("Преобразование столбца 'Дата операции' в datetime")
+    df: pd.DataFrame = pd.DataFrame(transactions)
+
     df["Дата операции"] = pd.to_datetime(
         df["Дата операции"],
         format="%d.%m.%Y %H:%M:%S",
+        errors="coerce",
     )
 
-    start_date, end_date = get_month_period(current_dt)
-    logger.info(
-        "Период анализа: %s — %s",
-        start_date.strftime("%d.%m.%Y"),
-        end_date.strftime("%d.%m.%Y"),
+    # РАСХОДЫ
+    expenses_df = df[df["Сумма операции"] < 0].copy()
+    expenses_df["amount"] = expenses_df["Сумма операции"].abs()
+
+    total_expenses: int = int(expenses_df["amount"].sum())
+
+    grouped_expenses = (
+        expenses_df
+        .groupby("Категория")["amount"]
+        .sum()
+        .sort_values(ascending=False)
     )
 
-    df_period = df[(df["Дата операции"] >= start_date) & (df["Дата операции"] <= end_date)]
+    main_expenses: list[dict[str, Any]] = []
+    transfers_and_cash: list[dict[str, Any]] = []
 
-    logger.info("Транзакций в периоде: %s", len(df_period))
+    for category, amount in grouped_expenses.items():
+        item = {
+            "category": str(category),
+            "amount": int(amount),
+        }
 
-    settings = load_user_settings()
-    currencies = settings.get("user_currencies", [])
-    stocks = settings.get("user_stocks", [])
+        if category in ("Наличные", "Переводы"):
+            transfers_and_cash.append(item)
+        else:
+            main_expenses.append(item)
 
-    logger.debug(
-        "Настройки пользователя — валюты: %s, акции: %s",
-        currencies,
-        stocks,
+    # ДОХОДЫ
+    income_df = df[df["Сумма операции"] > 0]
+    total_income: int = int(income_df["Сумма операции"].sum())
+
+    grouped_income = (
+        income_df
+        .groupby("Категория")["Сумма операции"]
+        .sum()
+        .sort_values(ascending=False)
+    )
+
+    income_main = [
+        {
+            "category": str(category),
+            "amount": int(amount),
+        }
+        for category, amount in grouped_income.items()
+    ]
+
+    # КУРСЫ / АКЦИИ
+    currency_rates = get_currency_rates(["USD", "EUR"])
+    stock_prices = get_stock_prices(
+        ["AAPL", "AMZN", "GOOGL", "MSFT", "TSLA"]
     )
 
     result = {
-        "greeting": get_greeting(current_dt),
-        "cards": cards_summary(df_period),
-        "top_transactions": top_transactions(df_period),
-        "currency_rates": get_currency_rates(currencies) if currencies else [],
-        "stock_prices": get_stock_prices(stocks) if stocks else [],
+        "expenses": {
+            "total_amount": total_expenses,
+            "main": main_expenses,
+            "transfers_and_cash": transfers_and_cash,
+        },
+        "income": {
+            "total_amount": total_income,
+            "main": income_main,
+        },
+        "currency_rates": currency_rates,
+        "stock_prices": stock_prices,
     }
 
-    logger.info("JSON для главной страницы сформирован")
+    logger.info("Главная страница успешно сформирована")
     return result
