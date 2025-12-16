@@ -68,10 +68,7 @@ def spending_by_category(
 
     target_date: datetime = pd.to_datetime(date)
 
-    filtered = df[
-        (df["Категория"] == category)
-        & (df["Дата операции"].dt.date == target_date.date())
-    ]
+    filtered = df[(df["Категория"] == category) & (df["Дата операции"].dt.date == target_date.date())]
 
     result = filtered.to_dict(orient="records")
 

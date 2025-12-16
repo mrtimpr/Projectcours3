@@ -48,12 +48,7 @@ def main_page_view(
 
     total_expenses: int = int(expenses_df["amount"].sum())
 
-    grouped_expenses = (
-        expenses_df
-        .groupby("Категория")["amount"]
-        .sum()
-        .sort_values(ascending=False)
-    )
+    grouped_expenses = expenses_df.groupby("Категория")["amount"].sum().sort_values(ascending=False)
 
     main_expenses: list[dict[str, Any]] = []
     transfers_and_cash: list[dict[str, Any]] = []
@@ -73,12 +68,7 @@ def main_page_view(
     income_df = df[df["Сумма операции"] > 0]
     total_income: int = int(income_df["Сумма операции"].sum())
 
-    grouped_income = (
-        income_df
-        .groupby("Категория")["Сумма операции"]
-        .sum()
-        .sort_values(ascending=False)
-    )
+    grouped_income = income_df.groupby("Категория")["Сумма операции"].sum().sort_values(ascending=False)
 
     income_main = [
         {
@@ -90,9 +80,7 @@ def main_page_view(
 
     # КУРСЫ / АКЦИИ
     currency_rates = get_currency_rates(["USD", "EUR"])
-    stock_prices = get_stock_prices(
-        ["AAPL", "AMZN", "GOOGL", "MSFT", "TSLA"]
-    )
+    stock_prices = get_stock_prices(["AAPL", "AMZN", "GOOGL", "MSFT", "TSLA"])
 
     result = {
         "expenses": {

@@ -44,6 +44,7 @@ def sample_transactions() -> list[dict[str, Any]]:
 
 # cashback_by_category
 
+
 def test_cashback_by_category_basic(sample_transactions):
     result_json = cashback_by_category(
         transactions=sample_transactions,
@@ -83,6 +84,7 @@ def test_cashback_by_category_empty_transactions():
 
 # search_transactions
 
+
 def test_search_transactions_by_description(sample_transactions):
     result_json = search_transactions(
         transactions=sample_transactions,
@@ -118,6 +120,7 @@ def test_search_transactions_no_results(sample_transactions):
 
 
 # search_phone_numbers
+
 
 def test_search_phone_numbers_found(sample_transactions):
     result_json = search_phone_numbers(

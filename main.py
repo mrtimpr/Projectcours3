@@ -6,11 +6,7 @@ import pandas as pd
 
 from log_setup import setup_logging
 from src.reports import spending_by_category
-from src.services import (
-    cashback_by_category,
-    search_phone_numbers,
-    search_transactions,
-)
+from src.services import cashback_by_category, search_phone_numbers, search_transactions
 from src.views import main_page_view
 
 DATA_PATH: str = "data/operations.xlsx"
@@ -61,13 +57,7 @@ def main() -> None:
 
     transactions: list[dict[str, Any]] = df.to_dict(orient="records")
 
-    categories: list[str] = (
-        df["Категория"]
-        .dropna()
-        .astype(str)
-        .unique()
-        .tolist()
-    )
+    categories: list[str] = df["Категория"].dropna().astype(str).unique().tolist()
     categories.sort()
 
     while True:
@@ -110,9 +100,7 @@ def main() -> None:
         if choice == "2":
             print("\n=== Главная страница ===")
 
-            date_time: str = input(
-                "Введите дату и время (YYYY-MM-DD HH:MM:SS): "
-            ).strip()
+            date_time: str = input("Введите дату и время (YYYY-MM-DD HH:MM:SS): ").strip()
 
             try:
                 view_result: dict[str, Any] = main_page_view(
@@ -166,9 +154,7 @@ def main() -> None:
         if choice == "5":
             print("\n=== Поиск по номеру телефона ===")
 
-            phone: str = input(
-                "Введите номер телефона (в любом формате): "
-            ).strip()
+            phone: str = input("Введите номер телефона (в любом формате): ").strip()
 
             result_json: str = search_phone_numbers(
                 transactions=transactions,
